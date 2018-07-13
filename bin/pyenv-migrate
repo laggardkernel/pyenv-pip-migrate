@@ -56,10 +56,14 @@ fi
 SEED="$(date "+%Y%m%d%H%M%S").$$"
 LOG_PATH="${TMP}/python-build.${SEED}.log"
 PIP_REQUIREMENTS="${TMP}/requirements.${SEED}.txt"
+PIP_REQUIREMENTS_USER="${TMP}/requirements-user.${SEED}.txt"
 
 trap migration_failed ERR
+PYENV_VERSION="${src}" pyenv-exec pip freeze --user >> "${PIP_REQUIREMENTS_USER}"
 PYENV_VERSION="${src}" pyenv-exec pip freeze >> "${PIP_REQUIREMENTS}"
+PYENV_VERSION="${dst}" pyenv-exec pip install --user --requirement "${PIP_REQUIREMENTS_USER}"
 PYENV_VERSION="${dst}" pyenv-exec pip install --requirement "${PIP_REQUIREMENTS}"
 pyenv-rehash
 rm -f "${PIP_REQUIREMENTS}"
+rm -f "${PIP_REQUIREMENTS_USER}"
 trap - ERR
