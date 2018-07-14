@@ -44,6 +44,9 @@ while [[ $# -gt 0 ]]; do
         --venv)
             VENV=true
             ;;
+        --leaves)
+            LEAVES=true
+            ;;
         *)
             if [ -z $src ]; then
               src="$key"
@@ -83,8 +86,15 @@ PIP_REQUIREMENTS="${TMP}/requirements.${SEED}.txt"
 PIP_REQUIREMENTS_USER="${TMP}/requirements-user.${SEED}.txt"
 
 trap migration_failed ERR
-[ $USER ] && PYENV_VERSION="${src}" pyenv-exec pip freeze --local --user >> "${PIP_REQUIREMENTS_USER}"
-PYENV_VERSION="${src}" pyenv-exec pip freeze --local >> "${PIP_REQUIREMENTS}"
+if [ $LEAVES ]; then
+  PYENV_VERSION="${src}" pyenv-exec pip install pip-autoremove
+  USER_SITE_PATH=`PYENV_VERSION="${src}" pyenv-exec python -c "from __future__ import print_function; import site; print(site.USER_SITE)"`
+  [ $USER ] && PYENV_VERSION="${src}" pyenv-exec pip-autoremove -L | grep "$USER_SITE_PATH" | cut -d' ' -f1,2 | sed 's/ /==/' >> "${PIP_REQUIREMENTS_USER}"
+  PYENV_VERSION="${src}" pyenv-exec pip-autoremove -L | cut -d' ' -f1,2 | sed 's/ /==/' >> "${PIP_REQUIREMENTS}"
+else
+  [ $USER ] && PYENV_VERSION="${src}" pyenv-exec pip freeze --local --user >> "${PIP_REQUIREMENTS_USER}"
+  PYENV_VERSION="${src}" pyenv-exec pip freeze --local >> "${PIP_REQUIREMENTS}"
+fi
 
 if [ $VENV ]; then
   pyenv uninstall -f "$src"
