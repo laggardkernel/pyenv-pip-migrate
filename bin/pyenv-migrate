@@ -28,12 +28,36 @@ migration_failed() {
     echo "MIGRATION FAILED"
     echo
     echo "Inspect or clean up the package list at ${PIP_REQUIREMENTS}"
+    [ $USER ] && echo "Inspect or clean the user package list at ${PIP_REQUIREMENTS_USER}"
   } 1>&2
   exit 1
 }
 
-src="$1"
-dst="$2"
+# Option parsing
+while [[ $# -gt 0 ]]; do
+    key="$1"
+
+    case $key in
+        --user)
+            USER=true
+            ;;
+        --venv)
+            VENV=true
+            ;;
+        *)
+            if [ -z $src ]; then
+              src="$key"
+            elif [ -z $dst ]; then
+              dst="$key"
+            else
+              (>&2 printf "Unknown parameter: %s\n" "$1")
+              usage 1
+            fi
+            ;;
+    esac
+    shift
+done
+
 [ -n "$src" ] || usage 1
 [ -n "$dst" ] || usage 1
 
@@ -59,10 +83,19 @@ PIP_REQUIREMENTS="${TMP}/requirements.${SEED}.txt"
 PIP_REQUIREMENTS_USER="${TMP}/requirements-user.${SEED}.txt"
 
 trap migration_failed ERR
-PYENV_VERSION="${src}" pyenv-exec pip freeze --user >> "${PIP_REQUIREMENTS_USER}"
-PYENV_VERSION="${src}" pyenv-exec pip freeze >> "${PIP_REQUIREMENTS}"
-PYENV_VERSION="${dst}" pyenv-exec pip install --user --requirement "${PIP_REQUIREMENTS_USER}"
-PYENV_VERSION="${dst}" pyenv-exec pip install --requirement "${PIP_REQUIREMENTS}"
+[ $USER ] && PYENV_VERSION="${src}" pyenv-exec pip freeze --local --user >> "${PIP_REQUIREMENTS_USER}"
+PYENV_VERSION="${src}" pyenv-exec pip freeze --local >> "${PIP_REQUIREMENTS}"
+
+if [ $VENV ]; then
+  pyenv uninstall -f "$src"
+  pyenv virtualenv "$dst" "$src"
+  [ $USER ] && PYENV_VERSION="${src}" pyenv-exec pip install --user --requirement "${PIP_REQUIREMENTS_USER}"
+  PYENV_VERSION="${src}" pyenv-exec pip install --requirement "${PIP_REQUIREMENTS}"
+else
+  [ $USER ] && PYENV_VERSION="${dst}" pyenv-exec pip install --user --requirement "${PIP_REQUIREMENTS_USER}"
+  PYENV_VERSION="${dst}" pyenv-exec pip install --requirement "${PIP_REQUIREMENTS}"
+fi
+
 pyenv-rehash
 rm -f "${PIP_REQUIREMENTS}"
 rm -f "${PIP_REQUIREMENTS_USER}"
