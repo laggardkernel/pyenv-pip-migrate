@@ -27,8 +27,9 @@ migration_failed() {
   { echo
     echo "MIGRATION FAILED"
     echo
-    echo "Inspect or clean up the package list at ${PIP_REQUIREMENTS}"
-    [ $USER ] && echo "Inspect or clean the user package list at ${PIP_REQUIREMENTS_USER}"
+    echo "Inspect or clean up the package list at"
+    echo "  ${PIP_REQUIREMENTS}"
+    [ $USER ] && echo "  ${PIP_REQUIREMENTS_USER}"
   } 1>&2
   exit 1
 }
@@ -85,25 +86,29 @@ LOG_PATH="${TMP}/python-build.${SEED}.log"
 PIP_REQUIREMENTS="${TMP}/requirements.${SEED}.txt"
 PIP_REQUIREMENTS_USER="${TMP}/requirements-user.${SEED}.txt"
 
+[ $(PYENV_VERSION="${src}" pyenv-exec pip freeze --local --user | wc -l) -eq 0 ] && unset USER
+
 trap migration_failed ERR
 if [ $LEAVES ]; then
-  PYENV_VERSION="${src}" pyenv-exec pip install pip-autoremove
-  USER_SITE_PATH=`PYENV_VERSION="${src}" pyenv-exec python -c "from __future__ import print_function; import site; print(site.USER_SITE)"`
-  [ $USER ] && PYENV_VERSION="${src}" pyenv-exec pip-autoremove -L | grep "$USER_SITE_PATH" | cut -d' ' -f1,2 | sed 's/ /==/' >> "${PIP_REQUIREMENTS_USER}"
-  PYENV_VERSION="${src}" pyenv-exec pip-autoremove -L | cut -d' ' -f1,2 | sed 's/ /==/' >> "${PIP_REQUIREMENTS}"
+  PYENV_VERSION="${src}" pyenv-exec pip install pipdeptree
+  [ $USER ] && PYENV_VERSION="${src}" \
+    pyenv-exec pipdeptree -l -u | grep '==' | grep -E '^\S+.+$' >> "${PIP_REQUIREMENTS_USER}"
+  PYENV_VERSION="${src}" \
+    pyenv-exec pipdeptree -l | grep '==' | grep -E '^\S+.+$' >> "${PIP_REQUIREMENTS}"
 else
   [ $USER ] && PYENV_VERSION="${src}" pyenv-exec pip freeze --local --user >> "${PIP_REQUIREMENTS_USER}"
   PYENV_VERSION="${src}" pyenv-exec pip freeze --local >> "${PIP_REQUIREMENTS}"
 fi
 
 if [ $VENV ]; then
+  [ $USER ] && PYENV_VERSION="${src}" pyenv-exec pip uninstall -y -r "${PIP_REQUIREMENTS_USER}"
   pyenv uninstall -f "$src"
   pyenv virtualenv "$dst" "$src"
-  [ $USER ] && PYENV_VERSION="${src}" pyenv-exec pip install --user --requirement "${PIP_REQUIREMENTS_USER}"
-  PYENV_VERSION="${src}" pyenv-exec pip install --requirement "${PIP_REQUIREMENTS}"
+  [ $USER ] && PYENV_VERSION="${src}" pyenv-exec pip install --user -r "${PIP_REQUIREMENTS_USER}"
+  PYENV_VERSION="${src}" pyenv-exec pip install -r "${PIP_REQUIREMENTS}"
 else
-  [ $USER ] && PYENV_VERSION="${dst}" pyenv-exec pip install --user --requirement "${PIP_REQUIREMENTS_USER}"
-  PYENV_VERSION="${dst}" pyenv-exec pip install --requirement "${PIP_REQUIREMENTS}"
+  [ $USER ] && PYENV_VERSION="${dst}" pyenv-exec pip install --user -r "${PIP_REQUIREMENTS_USER}"
+  PYENV_VERSION="${dst}" pyenv-exec pip install -r "${PIP_REQUIREMENTS}"
 fi
 
 pyenv-rehash
