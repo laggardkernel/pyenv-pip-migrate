@@ -107,6 +107,11 @@ else
 fi
 
 pyenv-rehash
-rm -f "${PIP_REQUIREMENTS}"
-rm -f "${PIP_REQUIREMENTS_USER}"
+if [ -z "$PYENV_DEBUG" ]; then
+  rm -f "${PIP_REQUIREMENTS}"
+  rm -f "${PIP_REQUIREMENTS_USER}"
+else
+  echo "${PIP_REQUIREMENTS}"
+  echo "${PIP_REQUIREMENTS_USER}"
+fi
 trap - ERR
